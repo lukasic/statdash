@@ -284,6 +284,16 @@ async function submitActionModal(): Promise<void> {
   }
 }
 
+// ── SSH copy ─────────────────────────────────────────────────────────────────
+
+const copiedHost = ref<string | null>(null)
+
+async function copySSH(host: string): Promise<void> {
+  await navigator.clipboard.writeText(`ssh ${host}`)
+  copiedHost.value = host
+  setTimeout(() => { copiedHost.value = null }, 2000)
+}
+
 // ── Output modal ──────────────────────────────────────────────────────────────
 
 const outputModal = ref<{ name: string; output: string } | null>(null)
@@ -408,7 +418,12 @@ function onKeydown(e: KeyboardEvent): void {
                 <div class="flex items-center justify-between gap-4">
                   <div class="min-w-0">
                     <span class="font-medium text-sm text-foreground">{{ check.name }}</span>
-                    <span class="text-xs text-muted-foreground ml-2">{{ check.host }}</span>
+                    <button
+                      class="text-xs text-muted-foreground ml-2 transition-colors"
+                      :class="copiedHost === check.host ? 'text-green-600' : 'hover:text-foreground'"
+                      :title="copiedHost === check.host ? 'Copied!' : `Copy: ssh ${check.host}`"
+                      @click.stop="copySSH(check.host)"
+                    >{{ check.host }}</button>
                   </div>
                   <div class="shrink-0 flex items-center gap-2">
                     <a
@@ -668,7 +683,14 @@ function onKeydown(e: KeyboardEvent): void {
                         >{{ removeDowntimeState.get(check.id) === 'loading' ? '…' : removeDowntimeState.get(check.id) === 'done' ? '✓' : '×' }}</button>
                       </div>
                     </td>
-                    <td class="py-1.5 pr-3 text-muted-foreground whitespace-nowrap">{{ check.host }}</td>
+                    <td class="py-1.5 pr-3 whitespace-nowrap">
+                      <button
+                        class="transition-colors"
+                        :class="copiedHost === check.host ? 'text-green-600' : 'text-muted-foreground hover:text-foreground'"
+                        :title="copiedHost === check.host ? 'Copied!' : `Copy: ssh ${check.host}`"
+                        @click="copySSH(check.host)"
+                      >{{ check.host }}</button>
+                    </td>
                     <td class="py-1.5 pr-3 text-muted-foreground whitespace-nowrap">
                       <a
                         v-if="check.url"
