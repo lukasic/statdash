@@ -1,0 +1,47 @@
+pull_interval: 10  # seconds
+
+sources:
+  - name: icinga-prod
+    type: icinga2
+    url: https://icinga.example.com:5665
+    url_template: "https://icinga.example.com/icingaweb2/icingadb/services?host.name={{ host_name }}#!/icingaweb2/icingadb/service?name={{ check_name }}&host.name={{ host_name }}"
+    username: root
+    password: secret
+    verify_ssl: false
+    filter: '"my group" in host.groups'
+
+  - name: icinga-staging
+    type: icinga2
+    url: https://icinga-staging.example.com:5665
+    username: root
+    password: secret
+    verify_ssl: false
+
+  - name: nodeping-main
+    type: nodeping
+    api_key: your-api-key-here
+    url_template: "https://app.nodeping.com/checks/{{ check_id }}"
+
+sections:
+  - name: Backups
+    description: Backup-related checks
+    filters:
+      - source: icinga-prod
+        name_pattern: "backup*"
+      - source: icinga-staging
+        name_pattern: "backup*"
+
+  - name: Performance
+    description: Performance and resource checks
+    filters:
+      - source: icinga-prod
+        name_pattern: "disk*"
+      - source: icinga-prod
+        name_pattern: "load*"
+      - source: icinga-prod
+        name_pattern: "memory*"
+
+  - name: Uptime
+    description: External uptime monitoring
+    filters:
+      - source: nodeping-main
