@@ -57,3 +57,11 @@
     @apply bg-background text-foreground;
   }
 }
+
+.high-contrast {
+  --muted-foreground: 215.4 30% 28%;
+}
+
+.dark.high-contrast {
+  --muted-foreground: 215 25% 82%;
+}

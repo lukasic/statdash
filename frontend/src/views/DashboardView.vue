@@ -52,6 +52,22 @@ import { triggerRecheck, removeAck, removeDowntime, acknowledge, scheduleDowntim
 
 const { theme, toggle: toggleTheme } = useTheme()
 
+// ── High contrast ─────────────────────────────────────────────────────────────
+
+const highContrast = ref(localStorage.getItem('statdash-high-contrast') === '1')
+
+function applyHighContrast(val: boolean): void {
+  document.documentElement.classList.toggle('high-contrast', val)
+}
+
+applyHighContrast(highContrast.value)
+
+function toggleHighContrast(): void {
+  highContrast.value = !highContrast.value
+  localStorage.setItem('statdash-high-contrast', highContrast.value ? '1' : '0')
+  applyHighContrast(highContrast.value)
+}
+
 // ── Filter mode ───────────────────────────────────────────────────────────────
 
 type FilterMode = 'active' | 'all' | 'acknowledged' | 'in_downtime'
@@ -324,6 +340,13 @@ function onKeydown(e: KeyboardEvent): void {
       </div>
       <div class="flex items-center gap-4">
         <span class="text-sm text-muted-foreground">{{ auth.user?.email }}</span>
+        <!-- High contrast toggle -->
+        <button
+          class="text-sm transition-colors"
+          :class="highContrast ? 'text-foreground' : 'text-muted-foreground hover:text-foreground'"
+          :title="highContrast ? 'High contrast on' : 'High contrast off'"
+          @click="toggleHighContrast"
+        >◑</button>
         <!-- View mode toggle -->
         <button
           class="text-sm text-muted-foreground hover:text-foreground transition-colors"
