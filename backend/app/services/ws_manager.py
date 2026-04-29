@@ -19,7 +19,7 @@ class WebSocketManager:
 
     async def broadcast(self, data: dict) -> None:
         dead: set[WebSocket] = set()
-        for ws in self._connections:
+        for ws in list(self._connections):
             try:
                 if ws.client_state == WebSocketState.CONNECTED:
                     await ws.send_json(data)

@@ -47,7 +47,10 @@ class Poller:
     async def _poll_loop(self, source: SourceConfig) -> None:
         backend = self._factory(source)
         while True:
-            await self._poll_once(source.name, backend)
+            try:
+                await self._poll_once(source.name, backend)
+            except Exception:
+                logger.exception("Unhandled error in poll loop for source '%s'", source.name)
             await asyncio.sleep(self._config.pull_interval)
 
     async def _poll_once(self, source_name: str, backend: BaseBackend) -> None:

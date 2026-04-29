@@ -6,6 +6,7 @@ from fastapi import FastAPI, Request, WebSocket
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from starlette.websockets import WebSocketDisconnect
+from websockets.exceptions import ConnectionClosedError
 
 from app.api.router import api_router
 from app.core.app_config import get_app_config, load_app_config
@@ -73,7 +74,7 @@ async def websocket_endpoint(websocket: WebSocket) -> None:
         await websocket.send_json(data)
         while True:
             await websocket.receive_text()
-    except WebSocketDisconnect:
+    except (WebSocketDisconnect, ConnectionClosedError):
         pass
     finally:
         ws_manager.disconnect(websocket)
