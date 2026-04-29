@@ -12,6 +12,7 @@ class Settings(BaseSettings):
     valkey_url: str = "redis://localhost:6379"
     config_path: str = "../config/config.yaml"
     cors_origins: list[str] = ["http://localhost:5173"]
+    api_token: str | None = None
 
     @field_validator("secret_key")
     @classmethod

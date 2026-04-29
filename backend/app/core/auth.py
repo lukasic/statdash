@@ -1,7 +1,10 @@
+import secrets
 import uuid
-from typing import Optional
+from dataclasses import dataclass
+from typing import Annotated, Optional
 
-from fastapi import Depends, Request
+from fastapi import Depends, HTTPException, Request, status
+from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from fastapi_users import BaseUserManager, FastAPIUsers, UUIDIDMixin
 from fastapi_users.authentication import AuthenticationBackend, CookieTransport, JWTStrategy
 from fastapi_users.db import SQLAlchemyUserDatabase
@@ -10,6 +13,11 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.core.config import settings
 from app.core.database import get_async_session
 from app.models.user import User
+
+
+@dataclass
+class ApiTokenUser:
+    email: str = "mcp-api@statdash"
 
 
 async def get_user_db(session: AsyncSession = Depends(get_async_session)):
@@ -61,3 +69,23 @@ fastapi_users = FastAPIUsers[User, uuid.UUID](get_user_manager, [auth_backend])
 
 current_active_user = fastapi_users.current_user(active=True)
 current_superuser = fastapi_users.current_user(active=True, superuser=True)
+
+_bearer_scheme = HTTPBearer(auto_error=False)
+
+
+async def current_user_or_token(
+    cookie_user: Annotated[
+        User | None,
+        Depends(fastapi_users.current_user(active=True, optional=True)),
+    ],
+    credentials: Annotated[HTTPAuthorizationCredentials | None, Depends(_bearer_scheme)],
+) -> User | ApiTokenUser:
+    if cookie_user is not None:
+        return cookie_user
+    if (
+        credentials is not None
+        and settings.api_token is not None
+        and secrets.compare_digest(credentials.credentials, settings.api_token)
+    ):
+        return ApiTokenUser()
+    raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Not authenticated")

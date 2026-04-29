@@ -1,11 +1,11 @@
 from datetime import datetime, timezone
+from typing import Annotated
 
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
 
 from app.core.app_config import Icinga2SourceConfig, get_app_config
-from app.core.auth import current_active_user
-from app.models.user import User
+from app.core.auth import ApiTokenUser, User, current_user_or_token
 from app.services.backends.icinga2 import Icinga2Backend
 
 router = APIRouter(prefix="/actions", tags=["actions"])
@@ -48,7 +48,7 @@ def _split_check_id(check_id: str) -> tuple[str, str]:
 @router.post("/recheck", status_code=204)
 async def recheck(
     body: RecheckRequest,
-    _: User = Depends(current_active_user),
+    _: Annotated[User | ApiTokenUser, Depends(current_user_or_token)],
 ) -> None:
     source_cfg = _resolve_icinga_source(body.source)
     host, service = _split_check_id(body.check_id)
@@ -58,7 +58,7 @@ async def recheck(
 @router.post("/acknowledge", status_code=204)
 async def acknowledge(
     body: AckRequest,
-    user: User = Depends(current_active_user),
+    user: Annotated[User | ApiTokenUser, Depends(current_user_or_token)],
 ) -> None:
     source_cfg = _resolve_icinga_source(body.source)
     host, service = _split_check_id(body.check_id)
@@ -71,7 +71,7 @@ async def acknowledge(
 @router.post("/schedule-downtime", status_code=204)
 async def schedule_downtime(
     body: DowntimeRequest,
-    user: User = Depends(current_active_user),
+    user: Annotated[User | ApiTokenUser, Depends(current_user_or_token)],
 ) -> None:
     source_cfg = _resolve_icinga_source(body.source)
     host, service = _split_check_id(body.check_id)
@@ -85,7 +85,7 @@ async def schedule_downtime(
 @router.post("/remove-ack", status_code=204)
 async def remove_ack(
     body: RecheckRequest,
-    _: User = Depends(current_active_user),
+    _: Annotated[User | ApiTokenUser, Depends(current_user_or_token)],
 ) -> None:
     source_cfg = _resolve_icinga_source(body.source)
     host, service = _split_check_id(body.check_id)
@@ -95,7 +95,7 @@ async def remove_ack(
 @router.post("/remove-downtime", status_code=204)
 async def remove_downtime(
     body: RecheckRequest,
-    _: User = Depends(current_active_user),
+    _: Annotated[User | ApiTokenUser, Depends(current_user_or_token)],
 ) -> None:
     source_cfg = _resolve_icinga_source(body.source)
     host, service = _split_check_id(body.check_id)
