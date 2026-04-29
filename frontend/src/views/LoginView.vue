@@ -1,6 +1,7 @@
 <script setup lang="ts">
-import { ref } from 'vue'
-import { useRouter } from 'vue-router'
+import { onMounted, ref } from 'vue'
+import { useRoute, useRouter } from 'vue-router'
+import { authApi, type SsoConfig } from '@/api/auth'
 import { useAuthStore } from '@/stores/auth'
 import { useTheme } from '@/composables/useTheme'
 
@@ -11,7 +12,22 @@ const password = ref('')
 const error = ref<string | null>(null)
 const loading = ref(false)
 const router = useRouter()
+const route = useRoute()
 const auth = useAuthStore()
+
+const ssoConfig = ref<SsoConfig | null>(null)
+
+onMounted(async () => {
+  const ssoError = route.query.sso_error
+  if (ssoError) {
+    error.value = typeof ssoError === 'string' ? ssoError : 'SSO login failed'
+  }
+  try {
+    ssoConfig.value = await authApi.fetchSsoConfig()
+  } catch {
+    // SSO config unavailable — hide the button
+  }
+})
 
 async function handleLogin() {
   error.value = null
@@ -24,6 +40,10 @@ async function handleLogin() {
   } finally {
     loading.value = false
   }
+}
+
+function handleSsoLogin() {
+  window.location.href = '/api/auth/sso/login'
 }
 </script>
 
@@ -77,6 +97,21 @@ async function handleLogin() {
           {{ loading ? 'Signing in...' : 'Sign in' }}
         </button>
       </form>
+
+      <template v-if="ssoConfig?.enabled">
+        <div class="relative flex items-center">
+          <div class="flex-grow border-t border-border" />
+          <span class="mx-3 text-xs text-muted-foreground">or</span>
+          <div class="flex-grow border-t border-border" />
+        </div>
+        <button
+          type="button"
+          class="w-full py-2 px-4 border border-border rounded-md text-sm font-medium text-foreground hover:bg-muted transition-colors"
+          @click="handleSsoLogin"
+        >
+          {{ ssoConfig.button_label }}
+        </button>
+      </template>
     </div>
   </div>
 </template>

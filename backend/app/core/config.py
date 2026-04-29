@@ -14,6 +14,25 @@ class Settings(BaseSettings):
     cors_origins: list[str] = ["http://localhost:5173"]
     api_token: str | None = None
 
+    keycloak_base_url: str | None = None
+    keycloak_realm: str | None = None
+    keycloak_client_id: str | None = None
+    keycloak_client_secret: str | None = None
+    sso_button_label: str = "Login via SSO"
+    # Override when backend is behind a reverse proxy (e.g. K8s ingress)
+    sso_callback_url: str | None = None
+    # Set to http://localhost:5173 in dev (frontend port differs from backend)
+    sso_frontend_url: str = "/"
+
+    @property
+    def sso_configured(self) -> bool:
+        return all([
+            self.keycloak_base_url,
+            self.keycloak_realm,
+            self.keycloak_client_id,
+            self.keycloak_client_secret,
+        ])
+
     @field_validator("secret_key")
     @classmethod
     def warn_insecure_key(cls, v: str) -> str:
