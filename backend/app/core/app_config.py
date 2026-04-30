@@ -25,8 +25,16 @@ class NodepingSourceConfig(BaseModel):
     url_template: str | None = None
 
 
+class UptimeKumaSourceConfig(BaseModel):
+    name: str
+    type: Literal["uptimekuma"]
+    url: str
+    api_key: str
+    url_template: str | None = None
+
+
 SourceConfig = Annotated[
-    Union[Icinga2SourceConfig, NodepingSourceConfig],
+    Union[Icinga2SourceConfig, NodepingSourceConfig, UptimeKumaSourceConfig],
     Field(discriminator="type"),
 ]
 

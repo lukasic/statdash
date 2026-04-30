@@ -30,11 +30,19 @@ class DowntimeRequest(BaseModel):
     expiry_at: str  # ISO 8601 UTC datetime
 
 
-def _resolve_icinga_source(source: str) -> tuple[Icinga2SourceConfig, str, str]:
+def _resolve_icinga_source(source: str) -> Icinga2SourceConfig:
     config = get_app_config()
     source_cfg = next((s for s in config.sources if s.name == source), None)
     if not source_cfg or not isinstance(source_cfg, Icinga2SourceConfig):
         raise HTTPException(status_code=404, detail="Icinga2 source not found")
+    return source_cfg
+
+
+def _resolve_source(source: str):
+    config = get_app_config()
+    source_cfg = next((s for s in config.sources if s.name == source), None)
+    if not source_cfg:
+        raise HTTPException(status_code=404, detail=f"Source '{source}' not found")
     return source_cfg
 
 
@@ -73,13 +81,17 @@ async def schedule_downtime(
     body: DowntimeRequest,
     user: Annotated[User | ApiTokenUser, Depends(current_user_or_token)],
 ) -> None:
-    source_cfg = _resolve_icinga_source(body.source)
-    host, service = _split_check_id(body.check_id)
+    source_cfg = _resolve_source(body.source)
     expiry_at = datetime.fromisoformat(body.expiry_at).replace(tzinfo=timezone.utc)
     duration_seconds = max(60, int((expiry_at - datetime.now(timezone.utc)).total_seconds()))
-    await Icinga2Backend(source_cfg).schedule_downtime(
-        host=host, service=service, author=user.email, comment=body.comment, duration_seconds=duration_seconds,
-    )
+
+    if isinstance(source_cfg, Icinga2SourceConfig):
+        host, service = _split_check_id(body.check_id)
+        await Icinga2Backend(source_cfg).schedule_downtime(
+            host=host, service=service, author=user.email, comment=body.comment, duration_seconds=duration_seconds,
+        )
+    else:
+        raise HTTPException(status_code=422, detail=f"schedule-downtime not supported for source type '{source_cfg.type}'")
 
 
 @router.post("/remove-ack", status_code=204)
