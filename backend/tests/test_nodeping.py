@@ -20,7 +20,7 @@ CHECKS_RESPONSE = {
         "label": "Down Service",
         "type": "HTTP",
         "state": 0,
-        "lasterror": 1745000000,
+        "firstdown": 1745000000000,  # milliseconds
         "parameters": {"target": "https://down.example.com"},
     },
     "check-unknown": {
@@ -61,10 +61,21 @@ async def test_fetch_checks_critical() -> None:
     assert down.host == "https://down.example.com"
     assert down.source == "nodeping-main"
     assert down.since is not None
+    # firstdown 1745000000000 ms = 1745000000 s
+    assert "2025" in down.since  # sanity-check the ms→s conversion
 
 
-async def test_fetch_checks_no_lasterror_gives_none_since() -> None:
+async def test_fetch_checks_no_firstdown_gives_none_since() -> None:
     data = {"check-x": {"_id": "check-x", "label": "X", "type": "HTTP", "state": 0,
+                         "parameters": {"target": "https://x.com"}}}
+    with patch("app.services.backends.nodeping.httpx.AsyncClient", return_value=_mock_client(data)):
+        results = await NodepingBackend(CONFIG).fetch_checks()
+    assert results[0].since is None
+
+
+async def test_fetch_checks_firstdown_false_gives_none_since() -> None:
+    data = {"check-x": {"_id": "check-x", "label": "X", "type": "HTTP", "state": 0,
+                         "firstdown": False,
                          "parameters": {"target": "https://x.com"}}}
     with patch("app.services.backends.nodeping.httpx.AsyncClient", return_value=_mock_client(data)):
         results = await NodepingBackend(CONFIG).fetch_checks()

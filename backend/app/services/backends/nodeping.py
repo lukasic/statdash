@@ -29,10 +29,11 @@ class NodepingBackend(BaseBackend):
             state = check.get("state", 1)
             if state == 1:
                 continue
-            lasterror = check.get("lasterror")
+            # firstdown is milliseconds since epoch; False when check is passing
+            firstdown = check.get("firstdown")
             since = (
-                datetime.fromtimestamp(lasterror, tz=timezone.utc).isoformat()
-                if lasterror
+                datetime.fromtimestamp(firstdown / 1000, tz=timezone.utc).isoformat()
+                if firstdown and firstdown is not False
                 else None
             )
             label = check.get("label", check_id)
