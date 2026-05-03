@@ -162,48 +162,41 @@ const newNoteContent = ref<Record<string, string>>({})
 const noteGeneral = ref<Record<string, boolean>>({})
 const loadingNotes = ref<Set<string>>(new Set())
 
-function notesKey(source: string, checkName: string, host: string): string {
-  return `${source}::${checkName}::${host}`
-}
-
-async function toggleNotes(source: string, checkName: string, host: string): Promise<void> {
-  const key = notesKey(source, checkName, host)
-  if (openNotes.value.has(key)) {
-    openNotes.value.delete(key)
+async function toggleNotes(checkId: string, source: string, checkName: string, host: string): Promise<void> {
+  if (openNotes.value.has(checkId)) {
+    openNotes.value.delete(checkId)
     return
   }
-  openNotes.value.add(key)
-  await loadNotes(source, checkName, host)
+  openNotes.value.add(checkId)
+  await loadNotes(checkId, source, checkName, host)
 }
 
-async function loadNotes(source: string, checkName: string, host: string): Promise<void> {
-  const key = notesKey(source, checkName, host)
-  loadingNotes.value.add(key)
+async function loadNotes(checkId: string, source: string, checkName: string, host: string): Promise<void> {
+  loadingNotes.value.add(checkId)
   try {
-    notesCache.value[key] = await listNotes(source, checkName, host)
+    notesCache.value[checkId] = await listNotes(source, checkName, host)
   } finally {
-    loadingNotes.value.delete(key)
+    loadingNotes.value.delete(checkId)
   }
 }
 
-async function submitNote(source: string, checkName: string, host: string): Promise<void> {
-  const key = notesKey(source, checkName, host)
-  const content = (newNoteContent.value[key] ?? '').trim()
+async function submitNote(checkId: string, source: string, checkName: string, host: string): Promise<void> {
+  const content = (newNoteContent.value[checkId] ?? '').trim()
   if (!content) return
-  const effectiveHost = noteGeneral.value[key] ? null : host
+  const effectiveHost = noteGeneral.value[checkId] ? null : host
   await createNote({ source, check_name: checkName, host: effectiveHost, content })
-  newNoteContent.value[key] = ''
-  await loadNotes(source, checkName, host)
+  newNoteContent.value[checkId] = ''
+  await loadNotes(checkId, source, checkName, host)
 }
 
-async function toggleResolved(note: Note, source: string, checkName: string, host: string): Promise<void> {
+async function toggleResolved(note: Note, checkId: string, source: string, checkName: string, host: string): Promise<void> {
   await updateNote(note.id, { resolved: !note.resolved })
-  await loadNotes(source, checkName, host)
+  await loadNotes(checkId, source, checkName, host)
 }
 
-async function removeNote(noteId: string, source: string, checkName: string, host: string): Promise<void> {
+async function removeNote(noteId: string, checkId: string, source: string, checkName: string, host: string): Promise<void> {
   await deleteNote(noteId)
-  await loadNotes(source, checkName, host)
+  await loadNotes(checkId, source, checkName, host)
 }
 
 // ── Actions ───────────────────────────────────────────────────────────────────
@@ -212,6 +205,14 @@ const icinga2Sources = computed<Set<string>>(() => {
   const s = new Set<string>()
   for (const src of data.value?.sources ?? []) {
     if (src.type === 'icinga2') s.add(src.name)
+  }
+  return s
+})
+
+const prometheusSources = computed<Set<string>>(() => {
+  const s = new Set<string>()
+  for (const src of data.value?.sources ?? []) {
+    if (src.type === 'prometheus') s.add(src.name)
   }
   return s
 })
@@ -496,7 +497,7 @@ function onKeydown(e: KeyboardEvent): void {
                   >{{ removeAckState.get(check.id) === 'loading' ? '…' : removeAckState.get(check.id) === 'done' ? '✓' : '×' }}</button>
                 </div>
                 <div
-                  v-if="check.downtime_comment || (check.in_downtime && icinga2Sources.has(check.source))"
+                  v-if="check.downtime_comment || (check.in_downtime && (icinga2Sources.has(check.source) || prometheusSources.has(check.source)))"
                   class="flex items-start gap-1 text-xs font-bold italic text-muted-foreground mt-0.5"
                 >
                   <span class="flex-1">
@@ -504,11 +505,11 @@ function onKeydown(e: KeyboardEvent): void {
                     <span v-if="check.downtime_expiry" class="font-normal not-italic"> · ends {{ formatChecked(check.downtime_expiry) }}</span>
                   </span>
                   <button
-                    v-if="icinga2Sources.has(check.source)"
+                    v-if="icinga2Sources.has(check.source) || prometheusSources.has(check.source)"
                     class="shrink-0 font-normal not-italic transition-colors"
                     :class="removeDowntimeState.get(check.id) === 'loading' ? 'text-muted-foreground/30 cursor-wait' : 'text-muted-foreground/50 hover:text-destructive'"
                     :disabled="removeDowntimeState.get(check.id) === 'loading'"
-                    title="Remove downtime"
+                    :title="prometheusSources.has(check.source) ? 'Remove silence' : 'Remove downtime'"
                     @click="doRemoveDowntime(check.source, check.id)"
                   >{{ removeDowntimeState.get(check.id) === 'loading' ? '…' : removeDowntimeState.get(check.id) === 'done' ? '✓' : '×' }}</button>
                 </div>
@@ -519,9 +520,9 @@ function onKeydown(e: KeyboardEvent): void {
                 <div class="mt-2 flex items-center gap-3">
                   <button
                     class="text-xs text-muted-foreground hover:text-foreground transition-colors"
-                    @click="toggleNotes(check.source, check.name, check.host)"
+                    @click="toggleNotes(check.id, check.source, check.name, check.host)"
                   >
-                    {{ openNotes.has(notesKey(check.source, check.name, check.host)) ? 'Hide notes' : 'Notes' }}
+                    {{ openNotes.has(check.id) ? 'Hide notes' : 'Notes' }}
                   </button>
                   <button
                     v-if="icinga2Sources.has(check.source)"
@@ -548,30 +549,30 @@ function onKeydown(e: KeyboardEvent): void {
                     @click="openActionModal('ack', check.source, check.id, check.name)"
                   >Ack</button>
                   <button
-                    v-if="icinga2Sources.has(check.source) && !check.in_downtime"
+                    v-if="(icinga2Sources.has(check.source) || prometheusSources.has(check.source)) && !check.in_downtime"
                     class="text-xs text-muted-foreground hover:text-foreground transition-colors"
                     @click="openActionModal('downtime', check.source, check.id, check.name)"
-                  >Downtime</button>
+                  >{{ prometheusSources.has(check.source) ? 'Silence' : 'Downtime' }}</button>
                 </div>
               </div>
 
               <!-- Notes panel (cards) -->
               <div
-                v-if="openNotes.has(notesKey(check.source, check.name, check.host))"
+                v-if="openNotes.has(check.id)"
                 class="border-t border-border/50 px-3 pb-3 pt-2 space-y-2"
               >
-                <template v-if="loadingNotes.has(notesKey(check.source, check.name, check.host))">
+                <template v-if="loadingNotes.has(check.id)">
                   <p class="text-xs text-muted-foreground">Loading…</p>
                 </template>
                 <template v-else>
                   <p
-                    v-if="(notesCache[notesKey(check.source, check.name, check.host)] ?? []).length === 0"
+                    v-if="(notesCache[check.id] ?? []).length === 0"
                     class="text-xs text-muted-foreground"
                   >
                     No notes yet.
                   </p>
                   <div
-                    v-for="note in notesCache[notesKey(check.source, check.name, check.host)] ?? []"
+                    v-for="note in notesCache[check.id] ?? []"
                     :key="note.id"
                     class="flex items-start gap-2"
                   >
@@ -587,18 +588,18 @@ function onKeydown(e: KeyboardEvent): void {
                       <button
                         class="text-xs text-muted-foreground hover:text-foreground transition-colors"
                         :title="note.resolved ? 'Reopen' : 'Mark resolved'"
-                        @click="toggleResolved(note, check.source, check.name, check.host)"
+                        @click="toggleResolved(note, check.id, check.source, check.name, check.host)"
                       >{{ note.resolved ? '↩' : '✓' }}</button>
                       <button
                         class="text-xs text-muted-foreground hover:text-red-500 transition-colors"
                         title="Delete"
-                        @click="removeNote(note.id, check.source, check.name, check.host)"
+                        @click="removeNote(note.id, check.id, check.source, check.name, check.host)"
                       >×</button>
                     </div>
                   </div>
                   <label class="flex items-center gap-1.5 text-xs text-muted-foreground mt-1 cursor-pointer select-none">
                     <input
-                      v-model="noteGeneral[notesKey(check.source, check.name, check.host)]"
+                      v-model="noteGeneral[check.id]"
                       type="checkbox"
                       class="accent-foreground"
                     />
@@ -606,15 +607,15 @@ function onKeydown(e: KeyboardEvent): void {
                   </label>
                   <div class="flex gap-2 mt-1">
                     <input
-                      v-model="newNoteContent[notesKey(check.source, check.name, check.host)]"
+                      v-model="newNoteContent[check.id]"
                       type="text"
                       placeholder="Add a note…"
                       class="flex-1 text-xs bg-background border border-border rounded px-2 py-1 focus:outline-none focus:ring-1 focus:ring-ring"
-                      @keydown.enter="submitNote(check.source, check.name, check.host)"
+                      @keydown.enter="submitNote(check.id, check.source, check.name, check.host)"
                     />
                     <button
                       class="text-xs px-2 py-1 rounded bg-muted hover:bg-muted/80 text-foreground transition-colors"
-                      @click="submitNote(check.source, check.name, check.host)"
+                      @click="submitNote(check.id, check.source, check.name, check.host)"
                     >Add</button>
                   </div>
                 </template>
@@ -645,7 +646,7 @@ function onKeydown(e: KeyboardEvent): void {
                       'bg-red-500/5': check.status === 'critical',
                       'bg-gray-500/5': check.status === 'unknown',
                     }"
-                    @dblclick="toggleNotes(check.source, check.name, check.host)"
+                    @dblclick="toggleNotes(check.id, check.source, check.name, check.host)"
                   >
                     <td class="py-1.5 pr-3">
                       <span
@@ -689,7 +690,7 @@ function onKeydown(e: KeyboardEvent): void {
                         >{{ removeAckState.get(check.id) === 'loading' ? '…' : removeAckState.get(check.id) === 'done' ? '✓' : '×' }}</button>
                       </div>
                       <div
-                        v-if="check.downtime_comment || (check.in_downtime && icinga2Sources.has(check.source))"
+                        v-if="check.downtime_comment || (check.in_downtime && (icinga2Sources.has(check.source) || prometheusSources.has(check.source)))"
                         class="flex items-start gap-1 text-xs font-bold italic text-muted-foreground leading-tight"
                       >
                         <span class="flex-1">
@@ -697,11 +698,11 @@ function onKeydown(e: KeyboardEvent): void {
                           <span v-if="check.downtime_expiry" class="font-normal not-italic"> · ends {{ formatChecked(check.downtime_expiry) }}</span>
                         </span>
                         <button
-                          v-if="icinga2Sources.has(check.source)"
+                          v-if="icinga2Sources.has(check.source) || prometheusSources.has(check.source)"
                           class="shrink-0 font-normal not-italic transition-colors"
                           :class="removeDowntimeState.get(check.id) === 'loading' ? 'text-muted-foreground/30 cursor-wait' : 'text-muted-foreground/50 hover:text-destructive'"
                           :disabled="removeDowntimeState.get(check.id) === 'loading'"
-                          title="Remove downtime"
+                          :title="prometheusSources.has(check.source) ? 'Remove silence' : 'Remove downtime'"
                           @click="doRemoveDowntime(check.source, check.id)"
                         >{{ removeDowntimeState.get(check.id) === 'loading' ? '…' : removeDowntimeState.get(check.id) === 'done' ? '✓' : '×' }}</button>
                       </div>
@@ -758,36 +759,36 @@ function onKeydown(e: KeyboardEvent): void {
                         @click="openActionModal('ack', check.source, check.id, check.name)"
                       >Ack</button>
                       <button
-                        v-if="icinga2Sources.has(check.source) && !check.in_downtime"
+                        v-if="(icinga2Sources.has(check.source) || prometheusSources.has(check.source)) && !check.in_downtime"
                         class="mr-2 text-xs text-muted-foreground hover:text-foreground transition-colors"
-                        title="Schedule downtime"
+                        :title="prometheusSources.has(check.source) ? 'Silence' : 'Schedule downtime'"
                         @click="openActionModal('downtime', check.source, check.id, check.name)"
-                      >DT</button>
+                      >{{ prometheusSources.has(check.source) ? 'SIL' : 'DT' }}</button>
                       <button
                         class="text-muted-foreground hover:text-foreground transition-colors"
-                        :title="openNotes.has(notesKey(check.source, check.name, check.host)) ? 'Hide notes' : 'Notes'"
-                        @click="toggleNotes(check.source, check.name, check.host)"
+                        :title="openNotes.has(check.id) ? 'Hide notes' : 'Notes'"
+                        @click="toggleNotes(check.id, check.source, check.name, check.host)"
                       >
-                        {{ openNotes.has(notesKey(check.source, check.name, check.host)) ? '▲' : '✎' }}
+                        {{ openNotes.has(check.id) ? '▲' : '✎' }}
                       </button>
                     </td>
                   </tr>
 
                   <!-- Notes expansion row -->
                   <tr
-                    v-if="openNotes.has(notesKey(check.source, check.name, check.host))"
+                    v-if="openNotes.has(check.id)"
                     :key="`${check.id}-notes`"
                   >
                     <td colspan="7" class="px-3 pb-3 pt-2 bg-muted/20 border-b border-border/40">
                       <pre v-if="check.output" class="text-xs text-muted-foreground font-mono whitespace-pre-wrap break-words mb-3 pb-3 border-b border-border/40">{{ check.output }}</pre>
-                      <p v-if="loadingNotes.has(notesKey(check.source, check.name, check.host))" class="text-muted-foreground">Loading…</p>
+                      <p v-if="loadingNotes.has(check.id)" class="text-muted-foreground">Loading…</p>
                       <template v-else>
                         <p
-                          v-if="(notesCache[notesKey(check.source, check.name, check.host)] ?? []).length === 0"
+                          v-if="(notesCache[check.id] ?? []).length === 0"
                           class="text-muted-foreground"
                         >No notes yet.</p>
                         <div
-                          v-for="note in notesCache[notesKey(check.source, check.name, check.host)] ?? []"
+                          v-for="note in notesCache[check.id] ?? []"
                           :key="note.id"
                           class="flex items-start gap-2 py-0.5"
                         >
@@ -801,18 +802,18 @@ function onKeydown(e: KeyboardEvent): void {
                             <button
                               class="text-muted-foreground hover:text-foreground transition-colors"
                               :title="note.resolved ? 'Reopen' : 'Mark resolved'"
-                              @click="toggleResolved(note, check.source, check.name, check.host)"
+                              @click="toggleResolved(note, check.id, check.source, check.name, check.host)"
                             >{{ note.resolved ? '↩' : '✓' }}</button>
                             <button
                               class="text-muted-foreground hover:text-red-500 transition-colors"
                               title="Delete"
-                              @click="removeNote(note.id, check.source, check.name, check.host)"
+                              @click="removeNote(note.id, check.id, check.source, check.name, check.host)"
                             >×</button>
                           </div>
                         </div>
                         <label class="flex items-center gap-1.5 text-xs text-muted-foreground mt-2 cursor-pointer select-none">
                           <input
-                            v-model="noteGeneral[notesKey(check.source, check.name, check.host)]"
+                            v-model="noteGeneral[check.id]"
                             type="checkbox"
                             class="accent-foreground"
                           />
@@ -820,15 +821,15 @@ function onKeydown(e: KeyboardEvent): void {
                         </label>
                         <div class="flex gap-2 mt-1">
                           <input
-                            v-model="newNoteContent[notesKey(check.source, check.name, check.host)]"
+                            v-model="newNoteContent[check.id]"
                             type="text"
                             placeholder="Add a note…"
                             class="flex-1 bg-background border border-border rounded px-2 py-1 focus:outline-none focus:ring-1 focus:ring-ring"
-                            @keydown.enter="submitNote(check.source, check.name, check.host)"
+                            @keydown.enter="submitNote(check.id, check.source, check.name, check.host)"
                           />
                           <button
                             class="px-2 py-1 rounded bg-muted hover:bg-muted/80 text-foreground transition-colors"
-                            @click="submitNote(check.source, check.name, check.host)"
+                            @click="submitNote(check.id, check.source, check.name, check.host)"
                           >Add</button>
                         </div>
                       </template>

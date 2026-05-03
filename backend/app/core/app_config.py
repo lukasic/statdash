@@ -33,8 +33,19 @@ class UptimeKumaSourceConfig(BaseModel):
     url_template: str | None = None
 
 
+class PrometheusSourceConfig(BaseModel):
+    name: str
+    type: Literal["prometheus"]
+    alertmanager_url: str
+    username: str | None = None
+    password: str | None = None
+    verify_ssl: bool = True
+    host_label: str = "instance"
+    url_template: str | None = None
+
+
 SourceConfig = Annotated[
-    Union[Icinga2SourceConfig, NodepingSourceConfig, UptimeKumaSourceConfig],
+    Union[Icinga2SourceConfig, NodepingSourceConfig, UptimeKumaSourceConfig, PrometheusSourceConfig],
     Field(discriminator="type"),
 ]
 

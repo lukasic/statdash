@@ -4,9 +4,10 @@ from typing import Annotated
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
 
-from app.core.app_config import Icinga2SourceConfig, get_app_config
+from app.core.app_config import Icinga2SourceConfig, PrometheusSourceConfig, get_app_config
 from app.core.auth import ApiTokenUser, User, current_user_or_token
 from app.services.backends.icinga2 import Icinga2Backend
+from app.services.backends.prometheus import PrometheusBackend
 
 router = APIRouter(prefix="/actions", tags=["actions"])
 
@@ -90,6 +91,10 @@ async def schedule_downtime(
         await Icinga2Backend(source_cfg).schedule_downtime(
             host=host, service=service, author=user.email, comment=body.comment, duration_seconds=duration_seconds,
         )
+    elif isinstance(source_cfg, PrometheusSourceConfig):
+        await PrometheusBackend(source_cfg).create_silence(
+            fingerprint=body.check_id, author=user.email, comment=body.comment, ends_at=expiry_at,
+        )
     else:
         raise HTTPException(status_code=422, detail=f"schedule-downtime not supported for source type '{source_cfg.type}'")
 
@@ -109,6 +114,11 @@ async def remove_downtime(
     body: RecheckRequest,
     _: Annotated[User | ApiTokenUser, Depends(current_user_or_token)],
 ) -> None:
-    source_cfg = _resolve_icinga_source(body.source)
-    host, service = _split_check_id(body.check_id)
-    await Icinga2Backend(source_cfg).remove_downtime(host, service)
+    source_cfg = _resolve_source(body.source)
+    if isinstance(source_cfg, Icinga2SourceConfig):
+        host, service = _split_check_id(body.check_id)
+        await Icinga2Backend(source_cfg).remove_downtime(host, service)
+    elif isinstance(source_cfg, PrometheusSourceConfig):
+        await PrometheusBackend(source_cfg).remove_silence(body.check_id)
+    else:
+        raise HTTPException(status_code=422, detail=f"remove-downtime not supported for source type '{source_cfg.type}'")
