@@ -217,6 +217,14 @@ const prometheusSources = computed<Set<string>>(() => {
   return s
 })
 
+const urlSources = computed<Set<string>>(() => {
+  const s = new Set<string>()
+  for (const src of data.value?.sources ?? []) {
+    if (src.type === 'nodeping' || src.type === 'uptimekuma') s.add(src.name)
+  }
+  return s
+})
+
 type ActionState = 'idle' | 'loading' | 'done' | 'error'
 const recheckState = ref<Map<string, ActionState>>(new Map())
 const removeAckState = ref<Map<string, ActionState>>(new Map())
@@ -477,7 +485,17 @@ function onKeydown(e: KeyboardEvent): void {
                 <div class="flex items-center justify-between gap-4">
                   <div class="min-w-0">
                     <span class="font-medium text-sm text-foreground">{{ check.name }}</span>
+                    <a
+                      v-if="urlSources.has(check.source)"
+                      :href="check.host"
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      class="text-xs text-muted-foreground ml-2 hover:text-foreground transition-colors"
+                      :title="`Open: ${check.host}`"
+                      @click.stop
+                    >{{ check.host }}</a>
                     <button
+                      v-else
                       class="text-xs text-muted-foreground ml-2 transition-colors"
                       :class="copiedHost === check.host ? 'text-green-600' : 'hover:text-foreground'"
                       :title="copiedHost === check.host ? 'Copied!' : `Copy: ssh ${check.host}`"
@@ -743,7 +761,16 @@ function onKeydown(e: KeyboardEvent): void {
                       </div>
                     </td>
                     <td class="py-1.5 pr-3 whitespace-nowrap">
+                      <a
+                        v-if="urlSources.has(check.source)"
+                        :href="check.host"
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        class="text-muted-foreground hover:text-foreground transition-colors"
+                        :title="`Open: ${check.host}`"
+                      >{{ check.host }}</a>
                       <button
+                        v-else
                         class="transition-colors"
                         :class="copiedHost === check.host ? 'text-green-600' : 'text-muted-foreground hover:text-foreground'"
                         :title="copiedHost === check.host ? 'Copied!' : `Copy: ssh ${check.host}`"
