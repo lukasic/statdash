@@ -306,9 +306,37 @@ async function submitActionModal(): Promise<void> {
 const copiedHost = ref<string | null>(null)
 
 async function copySSH(host: string): Promise<void> {
-  await navigator.clipboard.writeText(`ssh ${host}`)
+  const prefix = auth.user?.ssh_command_prefix ?? 'ssh'
+  await navigator.clipboard.writeText(`${prefix} ${host}`)
   copiedHost.value = host
   setTimeout(() => { copiedHost.value = null }, 2000)
+}
+
+// ── SSH settings modal ───────────────────────────────────────────────────────
+
+const sshSettingsOpen = ref(false)
+const sshPrefixInput = ref('')
+const sshSettingsSaving = ref(false)
+
+function openSshSettings(): void {
+  sshPrefixInput.value = auth.user?.ssh_command_prefix ?? 'ssh'
+  sshSettingsOpen.value = true
+}
+
+function closeSshSettings(): void {
+  sshSettingsOpen.value = false
+}
+
+async function saveSshSettings(): Promise<void> {
+  const trimmed = sshPrefixInput.value.trim()
+  if (!trimmed) return
+  sshSettingsSaving.value = true
+  try {
+    await auth.updateSshCommandPrefix(trimmed)
+    sshSettingsOpen.value = false
+  } finally {
+    sshSettingsSaving.value = false
+  }
 }
 
 // ── Output modal ──────────────────────────────────────────────────────────────
@@ -324,7 +352,7 @@ function closeOutputModal(): void {
 }
 
 function onKeydown(e: KeyboardEvent): void {
-  if (e.key === 'Escape') { closeOutputModal(); closeActionModal() }
+  if (e.key === 'Escape') { closeOutputModal(); closeActionModal(); closeSshSettings() }
 }
 </script>
 
@@ -362,6 +390,13 @@ function onKeydown(e: KeyboardEvent): void {
           @click="toggleTheme"
         >
           {{ theme === 'dark' ? '☀' : '☾' }}
+        </button>
+        <button
+          class="text-sm text-muted-foreground hover:text-foreground transition-colors"
+          :title="`SSH prefix: ${auth.user?.ssh_command_prefix ?? 'ssh'}`"
+          @click="openSshSettings"
+        >
+          SSH
         </button>
         <button
           class="text-sm text-muted-foreground hover:text-foreground transition-colors"
@@ -937,6 +972,47 @@ function onKeydown(e: KeyboardEvent): void {
             >×</button>
           </div>
           <pre class="p-4 text-xs text-foreground font-mono overflow-auto whitespace-pre-wrap break-words">{{ outputModal.output }}</pre>
+        </div>
+      </div>
+    </Teleport>
+
+    <!-- SSH settings modal -->
+    <Teleport to="body">
+      <div
+        v-if="sshSettingsOpen"
+        class="fixed inset-0 z-50 flex items-center justify-center bg-black/50"
+        @click.self="closeSshSettings"
+      >
+        <div class="bg-background border border-border rounded-lg shadow-xl w-full max-w-sm mx-4 p-5">
+          <h2 class="text-sm font-semibold text-foreground mb-4">SSH command prefix</h2>
+          <div class="flex items-center gap-2 mb-1">
+            <input
+              v-model="sshPrefixInput"
+              class="flex-1 bg-transparent border border-border rounded px-3 py-1.5 text-sm text-foreground outline-none focus:border-foreground/60"
+              placeholder="ssh"
+              spellcheck="false"
+              @keydown.enter="saveSshSettings"
+              @keydown.esc="closeSshSettings"
+            />
+            <span class="text-sm text-muted-foreground font-mono">hostname</span>
+          </div>
+          <p class="text-xs text-muted-foreground mb-4">
+            Preview: <span class="font-mono">{{ (sshPrefixInput.trim() || 'ssh') }} hostname</span>
+          </p>
+          <div class="flex justify-end gap-3">
+            <button
+              class="text-sm text-muted-foreground hover:text-foreground transition-colors"
+              :disabled="sshSettingsSaving"
+              @click="closeSshSettings"
+            >Cancel</button>
+            <button
+              class="text-sm px-4 py-1.5 bg-foreground text-background rounded disabled:opacity-40 transition-opacity"
+              :disabled="!sshPrefixInput.trim() || sshSettingsSaving"
+              @click="saveSshSettings"
+            >
+              {{ sshSettingsSaving ? 'Saving…' : 'Save' }}
+            </button>
+          </div>
         </div>
       </div>
     </Teleport>

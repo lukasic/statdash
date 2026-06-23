@@ -60,3 +60,42 @@ async def test_login_wrong_password(client: AsyncClient) -> None:
         "password": "wrongpassword",
     })
     assert response.status_code == 400
+
+
+@pytest.mark.asyncio
+async def test_ssh_command_prefix_default(client: AsyncClient) -> None:
+    await client.post("/api/auth/register", json={
+        "email": "test@example.com",
+        "password": "password123",
+    })
+    await client.post("/api/auth/jwt/login", data={
+        "username": "test@example.com",
+        "password": "password123",
+    })
+    response = await client.get("/api/users/me")
+    assert response.status_code == 200
+    assert response.json()["ssh_command_prefix"] == "ssh"
+
+
+@pytest.mark.asyncio
+async def test_ssh_command_prefix_update(client: AsyncClient) -> None:
+    await client.post("/api/auth/register", json={
+        "email": "test@example.com",
+        "password": "password123",
+    })
+    await client.post("/api/auth/jwt/login", data={
+        "username": "test@example.com",
+        "password": "password123",
+    })
+    response = await client.patch("/api/users/me", json={"ssh_command_prefix": "sshr"})
+    assert response.status_code == 200
+    assert response.json()["ssh_command_prefix"] == "sshr"
+
+    response = await client.get("/api/users/me")
+    assert response.json()["ssh_command_prefix"] == "sshr"
+
+
+@pytest.mark.asyncio
+async def test_ssh_command_prefix_update_requires_auth(client: AsyncClient) -> None:
+    response = await client.patch("/api/users/me", json={"ssh_command_prefix": "sshr"})
+    assert response.status_code == 401

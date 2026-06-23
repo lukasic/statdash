@@ -3,7 +3,7 @@ from fastapi_users import schemas
 
 
 class UserRead(schemas.BaseUser[uuid.UUID]):
-    pass
+    ssh_command_prefix: str
 
 
 class UserCreate(schemas.BaseUserCreate):
@@ -11,4 +11,4 @@ class UserCreate(schemas.BaseUserCreate):
 
 
 class UserUpdate(schemas.BaseUserUpdate):
-    pass
+    ssh_command_prefix: str | None = None

@@ -35,4 +35,11 @@ export const authApi = {
   async me(): Promise<User> {
     return client.request<User>('/users/me')
   },
+
+  async updateMe(data: Partial<Pick<User, 'ssh_command_prefix'>>): Promise<User> {
+    return client.request<User>('/users/me', {
+      method: 'PATCH',
+      body: JSON.stringify(data),
+    })
+  },
 }

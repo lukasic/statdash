@@ -28,5 +28,9 @@ export const useAuthStore = defineStore('auth', () => {
     initialized.value = false
   }
 
-  return { user, initialize, login, logout }
+  async function updateSshCommandPrefix(prefix: string): Promise<void> {
+    user.value = await authApi.updateMe({ ssh_command_prefix: prefix })
+  }
+
+  return { user, initialize, login, logout, updateSshCommandPrefix }
 })
