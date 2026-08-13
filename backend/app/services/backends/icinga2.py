@@ -3,6 +3,7 @@ from datetime import datetime, timedelta, timezone
 from typing import Literal
 
 import httpx
+import ssl
 
 from app.core.app_config import Icinga2SourceConfig
 from app.services.backends.base import BaseBackend, CheckResult, render_url
@@ -18,8 +19,14 @@ class Icinga2Backend(BaseBackend):
         self._config = config
 
     def _client(self) -> httpx.AsyncClient:
+        ctx = ssl.create_default_context()
+        ctx.set_ciphers("DEFAULT@SECLEVEL=1")
+        if not self._config.verify_ssl:
+            ctx.check_hostname = False
+            ctx.verify_mode = ssl.CERT_NONE
+
         return httpx.AsyncClient(
-            verify=self._config.verify_ssl,
+            verify=ctx,
             auth=(self._config.username, self._config.password),
             headers={"Accept": "application/json"},
             timeout=30.0,
